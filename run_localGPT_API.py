@@ -45,9 +45,7 @@ else:
 
 run_langest_commands = ["python", "ingest.py"]
 if DEVICE_TYPE == "cpu":
-    run_langest_commands.append("--device_type")
-    run_langest_commands.append(DEVICE_TYPE)
-
+    run_langest_commands.extend(("--device_type", DEVICE_TYPE))
 result = subprocess.run(run_langest_commands, capture_output=True)
 if result.returncode != 0:
     raise FileNotFoundError(
@@ -219,12 +217,10 @@ def run_ingest_route():
 
         run_langest_commands = ["python", "ingest.py"]
         if DEVICE_TYPE == "cpu":
-            run_langest_commands.append("--device_type")
-            run_langest_commands.append(DEVICE_TYPE)
-            
+            run_langest_commands.extend(("--device_type", DEVICE_TYPE))
         result = subprocess.run(run_langest_commands, capture_output=True)
         if result.returncode != 0:
-            return "Script execution failed: {}".format(result.stderr.decode("utf-8")), 500
+            return f'Script execution failed: {result.stderr.decode("utf-8")}', 500
         # load the vectorstore
         DB = Chroma(
             persist_directory=PERSIST_DIRECTORY,
@@ -236,7 +232,7 @@ def run_ingest_route():
         QA = RetrievalQA.from_chain_type(
             llm=LLM, chain_type="stuff", retriever=RETRIEVER, return_source_documents=SHOW_SOURCES
         )
-        return "Script executed successfully: {}".format(result.stdout.decode("utf-8")), 200
+        return f'Script executed successfully: {result.stdout.decode("utf-8")}', 200
     except Exception as e:
         return f"Error occurred: {str(e)}", 500
 
@@ -244,19 +240,14 @@ def run_ingest_route():
 @app.route("/api/prompt_route", methods=["GET", "POST"])
 def prompt_route():
     global QA
-    user_prompt = request.form.get("user_prompt")
-    if user_prompt:
+    if user_prompt := request.form.get("user_prompt"):
         # print(f'User Prompt: {user_prompt}')
         # Get the answer from the chain
         res = QA(user_prompt)
         answer, docs = res["result"], res["source_documents"]
 
-        prompt_response_dict = {
-            "Prompt": user_prompt,
-            "Answer": answer,
-        }
+        prompt_response_dict = {"Prompt": user_prompt, "Answer": answer, "Sources": []}
 
-        prompt_response_dict["Sources"] = []
         for document in docs:
             prompt_response_dict["Sources"].append(
                 (os.path.basename(str(document.metadata["source"])), str(document.page_content))
